@@ -265,7 +265,6 @@ def test_validation_result_to_markdown_includes_issue_table(sample_csv):
         {"age": ar.Int64(min=31), "missing": ar.String()},
     )
 
-    # Default: redact_values=False — raw values are shown
     markdown = result.to_markdown()
 
     assert "- Status: **failed**" in markdown
@@ -304,17 +303,11 @@ def test_validation_result_to_markdown_escapes_table_cells():
         bad_rows=[0],
     )
 
-    # Column, value, and message cells are escaped (default: redact_values=False)
     markdown = result.to_markdown()
+
     assert "notes\\|raw" in markdown
     assert "left\\|right<br>next" in markdown
     assert "Expected one\\|two<br>lines" in markdown
-
-    # Opt-in to redaction — value is replaced with [REDACTED]
-    markdown_redacted = result.to_markdown(redact_values=True)
-    assert "notes\\|raw" in markdown_redacted
-    assert "[REDACTED]" in markdown_redacted
-    assert "Expected one\\|two<br>lines" in markdown_redacted
 
 
 def test_validation_result_to_markdown_rejects_negative_max_issues(sample_csv):
@@ -338,104 +331,6 @@ def test_validation_result_to_markdown_rejects_non_integer_max_issues(sample_csv
             assert "max_issues must be an integer or None" in str(exc)
         else:
             raise AssertionError(f"Expected max_issues={invalid!r} to raise")
-
-
-# ---------------------------------------------------------------------------
-# Regression tests: redaction policy for ValidationResult.to_markdown
-# ---------------------------------------------------------------------------
-
-
-def test_validation_result_to_markdown_does_not_redact_by_default():
-    """Value column must contain raw value when redact_values=False (default)."""
-    result = ar.ValidationResult(
-        row_count=1,
-        issue_count=1,
-        issues=[
-            ar.ValidationIssue(
-                column="email",
-                rule="email",
-                row_index=1,
-                value="secret@internal.example.com",
-                message="Invalid email",
-            )
-        ],
-        bad_rows=[1],
-    )
-
-    markdown = result.to_markdown()  # default: redact_values=False
-
-    assert "[REDACTED]" not in markdown
-    assert "secret@internal.example.com" in markdown
-
-
-def test_validation_result_to_markdown_redacts_when_opted_in():
-    """Value column must contain [REDACTED] when redact_values=True."""
-    result = ar.ValidationResult(
-        row_count=1,
-        issue_count=1,
-        issues=[
-            ar.ValidationIssue(
-                column="email",
-                rule="email",
-                row_index=1,
-                value="secret@internal.example.com",
-                message="Invalid email",
-            )
-        ],
-        bad_rows=[1],
-    )
-
-    markdown = result.to_markdown(redact_values=True)
-
-    assert "[REDACTED]" in markdown
-    assert "secret@internal.example.com" not in markdown
-
-
-def test_validation_result_to_markdown_redacted_output_is_deterministic():
-    """to_markdown() must return identical output on repeated calls."""
-    result = ar.ValidationResult(
-        row_count=2,
-        issue_count=2,
-        issues=[
-            ar.ValidationIssue(
-                column="age", rule="min", row_index=1, value=-5, message="below 0"
-            ),
-            ar.ValidationIssue(
-                column="age", rule="max", row_index=2, value=999, message="above 120"
-            ),
-        ],
-        bad_rows=[1, 2],
-    )
-
-    assert result.to_markdown() == result.to_markdown()
-    assert result.to_markdown(redact_values=True) == result.to_markdown(
-        redact_values=True
-    )
-
-
-def test_validation_result_to_markdown_none_value_redacted():
-    """None/missing values are also replaced with [REDACTED] when redaction is enabled."""
-    result = ar.ValidationResult(
-        row_count=1,
-        issue_count=1,
-        issues=[
-            ar.ValidationIssue(
-                column="col",
-                rule="nullable",
-                row_index=1,
-                value=None,
-                message="Null not allowed",
-            )
-        ],
-        bad_rows=[1],
-    )
-
-    markdown = result.to_markdown(redact_values=True)  # explicit redaction
-    assert "[REDACTED]" in markdown
-
-    markdown_raw = result.to_markdown()  # default redaction is False
-    # None -> empty cell in raw mode
-    assert "[REDACTED]" not in markdown_raw
 
 
 def test_custom_pattern_validation(tmp_path):

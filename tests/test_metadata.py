@@ -21,9 +21,9 @@ def test_pyproject_metadata_is_valid():
     requires_python = project.get("requires-python")
     assert requires_python is not None, "requires-python must be specified"
     assert requires_python.startswith(">="), "requires-python should start with >="
-    
+
     min_version = requires_python.replace(">=", "").strip()
-    
+
     # 2. python version classifiers
     classifiers = project.get("classifiers", [])
     python_classifiers = [
@@ -31,22 +31,22 @@ def test_pyproject_metadata_is_valid():
         for c in classifiers
         if c.startswith("Programming Language :: Python ::")
     ]
-    
-    assert "3" in python_classifiers, (
-        "Must include 'Programming Language :: Python :: 3'"
-    )
+
+    assert (
+        "3" in python_classifiers
+    ), "Must include 'Programming Language :: Python :: 3'"
     assert (
         min_version in python_classifiers
     ), f"Missing classifier for min version {min_version}"
-    
+
     # 3. project URLs
     urls = project.get("urls", {})
     assert urls, "Project URLs must be defined"
-    
+
     required_url_keys = {"Homepage", "Repository", "Issues"}
     missing_urls = required_url_keys - urls.keys()
     assert not missing_urls, f"Missing required URLs: {missing_urls}"
-    
+
     for name, url in urls.items():
         assert url.startswith("http"), f"URL for {name} must be valid HTTP/HTTPS"
 

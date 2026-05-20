@@ -233,12 +233,7 @@ class ValidationResult:
 
         return pd.DataFrame([issue.to_dict() for issue in self.issues])
 
-    def to_markdown(
-        self,
-        *,
-        max_issues: int | None = None,
-        redact_values: bool = False,
-    ) -> str:
+    def to_markdown(self, *, max_issues: int | None = None) -> str:
         """Return a GitHub-friendly Markdown validation report.
 
         Parameters
@@ -246,10 +241,6 @@ class ValidationResult:
         max_issues : int, optional
             Maximum number of issues to include in the table. When omitted, all
             issues are shown.
-        redact_values : bool, default False
-            When True, the *Value* column in the issue table is replaced with
-            ``[REDACTED]`` so that invalid/sensitive data is not exposed in
-            reports. Set to ``False`` (the default) to keep original behavior.
         """
         if max_issues is not None and (
             not isinstance(max_issues, int) or isinstance(max_issues, bool)
@@ -284,18 +275,13 @@ class ValidationResult:
             ]
         )
         for issue in visible_issues:
-            value_cell = (
-                "[REDACTED]"
-                if redact_values
-                else _markdown_cell(_clean_scalar(issue.value))
-            )
             lines.append(
                 "| "
                 f"{_markdown_cell(issue.column)} | "
                 f"{_markdown_cell(issue.rule)} | "
                 f"{_markdown_cell(issue.severity)} | "
                 f"{_markdown_cell(issue.row_index)} | "
-                f"{value_cell} | "
+                f"{_markdown_cell(_clean_scalar(issue.value))} | "
                 f"{_markdown_cell(issue.message)} |"
             )
 
