@@ -1,4 +1,8 @@
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple, overload
+from __future__ import annotations
+
+from collections.abc import Mapping, Sequence
+from typing import Any, overload
+
 import numpy as np
 
 __all__ = [
@@ -18,16 +22,17 @@ __all__ = [
     "fill_nulls",
     "normalize_case",
     "rename_columns",
+    "combine_columns",
     "strip_whitespace",
 ]
 
 
 class DType:
-    STRING: "DType"
-    INT64: "DType"
-    FLOAT64: "DType"
-    BOOL: "DType"
-    NULL_TYPE: "DType"
+    STRING: DType
+    INT64: DType
+    FLOAT64: DType
+    BOOL: DType
+    NULL_TYPE: DType
 
 
 class Column:
@@ -61,23 +66,23 @@ class Column:
 
     def data(self) -> Any: ...
 
-    def null_mask(self) -> List[bool]: ...
+    def null_mask(self) -> list[bool]: ...
 
-    def clone(self) -> "Column": ...
+    def clone(self) -> Column: ...
 
 
 class Frame:
     def __init__(self) -> None: ...
 
-    def shape(self) -> Tuple[int, int]: ...
+    def shape(self) -> tuple[int, int]: ...
 
     def num_rows(self) -> int: ...
 
     def num_cols(self) -> int: ...
 
-    def column_names(self) -> List[str]: ...
+    def column_names(self) -> list[str]: ...
 
-    def dtypes(self) -> Dict[str, DType]: ...
+    def dtypes(self) -> dict[str, DType]: ...
 
     def memory_usage(self) -> int: ...
 
@@ -89,18 +94,20 @@ class Frame:
 
     def add_column(self, col: Column) -> None: ...
 
-    def clone(self) -> "Frame": ...
+    def select_columns(self, columns: Sequence[str]) -> Frame: ...
+
+    def clone(self) -> Frame: ...
 
     @staticmethod
     @overload
-    def from_dict(cols: Mapping[str, Sequence[Any]]) -> "Frame": ...
+    def from_dict(cols: Mapping[str, Sequence[Any]]) -> Frame: ...
 
     @staticmethod
     @overload
     def from_dict(
         cols: Mapping[str, Sequence[Any]],
         dtype_hints: Mapping[str, DType],
-    ) -> "Frame": ...
+    ) -> Frame: ...
 
 
 class CsvConfig:
@@ -108,13 +115,13 @@ class CsvConfig:
     has_header: bool
     encoding: str
     trim_headers: bool
-    thousands_separator: Optional[str]
+    thousands_separator: str | None
     mode: str
-    null_values: Optional[list[str]]
-    usecols: Optional[list[str]]
-    nrows: Optional[int]
-    skip_rows: int
-    sample_size: Optional[int]
+    null_values: list[str] | None
+    usecols: list[str] | None
+    nrows: int | None
+    skip_rows: int | None
+    sample_size: int | None
 
     def __init__(self, **kwargs: Any) -> None: ...
 
@@ -124,7 +131,7 @@ class CsvChunkReader:
 
     def open(self, path: str) -> None: ...
 
-    def next_chunk(self, chunk_size: int) -> Optional[Frame]: ...
+    def next_chunk(self, chunk_size: int) -> Frame | None: ...
 
     def close(self) -> None: ...
 
@@ -134,7 +141,7 @@ class CsvReader:
 
     def read(self, path: str) -> Frame: ...
 
-    def scan_schema(self, path: str) -> Dict[str, str]: ...
+    def scan_schema(self, path: str) -> dict[str, str]: ...
 
 
 class CsvWriteConfig:
@@ -158,9 +165,9 @@ def cast_types(frame: Frame, mapping: Mapping[str, str], coerce: bool) -> Frame:
 def clip_numeric(
     frame: Frame,
     *,
-    lower: Optional[float] = None,
-    upper: Optional[float] = None,
-    subset: Optional[Sequence[str]] = None,
+    lower: float | None = None,
+    upper: float | None = None,
+    subset: Sequence[str] | None = None,
 ) -> Frame: ...
 
 
@@ -173,21 +180,21 @@ def safe_divide_columns(
 ) -> Frame: ...
 
 
-def drop_duplicates(frame: Frame, subset: Optional[Sequence[str]] = None, keep: str = "first") -> Frame: ...
+def drop_duplicates(frame: Frame, subset: Sequence[str] | None = None, keep: str = "first") -> Frame: ...
 
 
-def drop_nulls(frame: Frame, subset: Optional[Sequence[str]] = None) -> Frame: ...
+def drop_nulls(frame: Frame, subset: Sequence[str] | None = None) -> Frame: ...
 
 
-def fill_nulls(frame: Frame, value: Any, subset: Optional[Sequence[str]] = None) -> Frame: ...
+def fill_nulls(frame: Frame, value: Any, subset: Sequence[str] | None = None) -> Frame: ...
 
 
-def normalize_case(frame: Frame, *, subset: Optional[Sequence[str]] = None, case_type: str = "lower") -> Frame: ...
+def normalize_case(frame: Frame, *, subset: Sequence[str] | None = None, case_type: str = "lower") -> Frame: ...
 
 
 def rename_columns(frame: Frame, mapping: Mapping[str, str]) -> Frame: ...
 
 
-def strip_whitespace(frame: Frame, *, subset: Optional[Sequence[str]] = None) -> Frame: ...
+def strip_whitespace(frame: Frame, *, subset: Sequence[str] | None = None) -> Frame: ...
 
 def combine_columns(frame: Frame, subset: Sequence[str], separator: str, output_column: str) -> Frame: ...
