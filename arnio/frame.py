@@ -69,6 +69,45 @@ class ArFrame:
         """Return the number of rows."""
         return self._frame.num_rows()
 
+    def __contains__(self, key: str) -> bool:
+        """Check if a column name exists in the frame.
+
+        Parameters
+        ----------
+        key : str
+            Column name to check.
+
+        Returns
+        -------
+        bool
+            True if the column exists.
+        """
+        return key in self.columns
+
+    def __getitem__(self, key: str):
+        """Access a column by name.
+
+        Parameters
+        ----------
+        key : str
+            Column name.
+
+        Returns
+        -------
+        list
+            The column data as a Python list.
+
+        Raises
+        ------
+        KeyError
+            If the column name is not found.
+        """
+        if key not in self.columns:
+            raise KeyError(
+                f"Column {key!r} not found. Available columns: {self.columns}"
+            )
+        return self._frame.column_by_name(key).to_python_list()
+
     def __repr__(self) -> str:
         """Return a string representation of the ArFrame."""
         rows, cols = self.shape
