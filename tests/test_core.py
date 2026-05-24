@@ -7,7 +7,7 @@ import pytest
 def test_missing_cpp_extension_error_message(monkeypatch):
     """Ensure that a missing _arnio_cpp extension raises an ImportError with a helpful message."""
     try:
-        import arnio
+        import arnio  # noqa: F401
     except ImportError as e:
         # If arnio is already failing to import due to missing extension (like in local tests)
         error_msg = str(e)
