@@ -1,6 +1,8 @@
-import pytest
-import sys
 import importlib
+import sys
+
+import pytest
+
 
 def test_missing_cpp_extension_error_message(monkeypatch):
     """Ensure that a missing _arnio_cpp extension raises an ImportError with a helpful message."""
