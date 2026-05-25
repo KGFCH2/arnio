@@ -1,4 +1,4 @@
-.PHONY: install test lint format benchmark clean
+.PHONY: install test test-quick lint format benchmark clean
 
 install:
 	pip install -e ".[dev]"
@@ -18,6 +18,9 @@ format:
 benchmark:
 	python benchmarks/generate_data.py
 	python benchmarks/benchmark_vs_pandas.py
+
+test-quick:  ## Run tests without coverage (faster iteration)
+	uv run pytest tests/
 
 clean:  ## Remove build artifacts (Linux/macOS only; Windows: delete manually)
 	find . -type d -name "__pycache__" -exec rm -rf {} +
