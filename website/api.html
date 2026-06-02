@@ -66,6 +66,7 @@
         <div class="api-func"><div class="api-func-header">frame.select_dtypes(include=..., exclude=...)</div><div class="api-func-body"><p>Return a new <code>ArFrame</code> filtered by dtype names like <code>int64</code>, <code>float64</code>, <code>string</code>, <code>bool</code>, or <code>null</code>.</p></div></div>
         <div class="api-func"><div class="api-func-header">frame.astype(dtype)</div><div class="api-func-body"><p>Cast one or more columns to a specified dtype or per-column type mapping and return a new <code>ArFrame</code>.</p></div></div>
         <div class="api-func"><div class="api-func-header">frame.to_dict()</div><div class="api-func-body"><p>Return a <code>dict[str, list]</code> representation for serialization or tests.</p></div></div>
+        <div class="api-func"><div class="api-func-header">frame.to_csv(path, *, delimiter=",", write_header=True, **kwargs)</div><div class="api-func-body"><p>Convenience wrapper to write the frame to a CSV file. Delegates to <code>arnio.write_csv</code>.</p></div></div>
         <div class="api-func"><div class="api-func-header">frame.drop_columns(columns)</div><div class="api-func-body"><p>Current-main method equivalent to the top-level <code>drop_columns</code> helper.</p></div></div>
         <div class="api-func"><div class="api-func-header">frame.describe() / frame.schema_summary</div><div class="api-func-body"><p>Summary statistics and column summaries. <code>schema_summary</code> returns <code>ColumnSummary</code> objects with name, dtype, and nullability.</p></div></div>
 
