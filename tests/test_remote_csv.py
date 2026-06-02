@@ -17,7 +17,7 @@ import socket
 import tempfile
 import threading
 import time
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -264,6 +264,75 @@ class TestFetchUrlToTempfile:
 
         for p in created_paths:
             assert not os.path.exists(p), f"Temp file was leaked: {p}"
+
+
+class TestFetchUrlToTempfileIncrementalDecoding:
+    """Regression tests for multi-byte UTF-8 characters split across read() chunks."""
+
+    def test_multibyte_char_split_across_chunks_does_not_raise(self):
+        """A valid multi-byte UTF-8 char split across two read() calls must not
+        raise RemoteReadError.  The euro sign € is 3 bytes (\xe2\x82\xac);
+        we split it so the first two bytes land in chunk 1 and the third in
+        chunk 2, which would break a naive per-chunk decode."""
+        euro_csv = "name,price\nCoffee,\u20ac2.50\n".encode("utf-8")
+
+        # Find the start of the 3-byte euro sign and split across it
+        euro_pos = euro_csv.index(b"\xe2")
+        chunk1 = euro_csv[: euro_pos + 2]  # \xe2 \x82  (first two bytes of €)
+        chunk2 = euro_csv[euro_pos + 2 :]  # \xac ...    (last byte of € + rest)
+
+        mock_response = MagicMock()
+        mock_response.read.side_effect = [chunk1, chunk2, b""]
+        mock_response.__enter__ = lambda s: s
+        mock_response.__exit__ = MagicMock(return_value=False)
+
+        with patch("arnio.io.urllib.request.urlopen", return_value=mock_response):
+            with patch("arnio.io.urllib.request.Request", return_value=MagicMock()):
+                path = _fetch_url_to_tempfile("http://example.com/data.csv")
+        try:
+            content = open(path, encoding="utf-8").read()
+            assert "\u20ac" in content, "Euro sign must survive the split-chunk decode"
+            assert "Coffee" in content
+        finally:
+            os.unlink(path)
+
+    def test_four_byte_char_split_across_chunks_does_not_raise(self):
+        """Same split test with a 4-byte character (𝄞, U+1D11E, musical symbol G clef)
+        to cover the full range of valid UTF-8 sequences."""
+        gclef_csv = "col\n\U0001d11e\n".encode("utf-8")
+
+        # 4-byte sequence: split after byte 2
+        gclef_pos = gclef_csv.index(b"\xf0")
+        chunk1 = gclef_csv[: gclef_pos + 2]
+        chunk2 = gclef_csv[gclef_pos + 2 :]
+
+        mock_response = MagicMock()
+        mock_response.read.side_effect = [chunk1, chunk2, b""]
+        mock_response.__enter__ = lambda s: s
+        mock_response.__exit__ = MagicMock(return_value=False)
+
+        with patch("arnio.io.urllib.request.urlopen", return_value=mock_response):
+            with patch("arnio.io.urllib.request.Request", return_value=MagicMock()):
+                path = _fetch_url_to_tempfile("http://example.com/data.csv")
+        try:
+            content = open(path, encoding="utf-8").read()
+            assert "\U0001d11e" in content
+        finally:
+            os.unlink(path)
+
+    def test_genuinely_invalid_utf8_still_raises_remote_read_error(self):
+        """Invalid UTF-8 bytes must still raise RemoteReadError, not pass through."""
+        bad_bytes = b"col\n\xff\xfe\n"  # \xff is never valid UTF-8
+
+        mock_response = MagicMock()
+        mock_response.read.side_effect = [bad_bytes, b""]
+        mock_response.__enter__ = lambda s: s
+        mock_response.__exit__ = MagicMock(return_value=False)
+
+        with patch("arnio.io.urllib.request.urlopen", return_value=mock_response):
+            with patch("arnio.io.urllib.request.Request", return_value=MagicMock()):
+                with pytest.raises(RemoteReadError, match="not valid UTF-8"):
+                    _fetch_url_to_tempfile("http://example.com/data.csv")
 
 
 # ---------------------------------------------------------------------------

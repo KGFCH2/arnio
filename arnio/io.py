@@ -354,18 +354,31 @@ def _fetch_url_to_tempfile(url: str) -> str:
                 url=url,
             ) from exc
 
-        # Stream response body into temp file, decoding as UTF-8.
+        # Stream response body into temp file using an incremental UTF-8
+        # decoder so that multi-byte characters split across read() chunk
+        # boundaries are handled correctly and do not raise a false
+        # RemoteReadError.
         with response:
+            decoder = codecs.getincrementaldecoder("utf-8")("strict")
             raw_bytes = response.read(_URL_FETCH_CHUNK_SIZE)
             while raw_bytes:
                 try:
-                    tmp.write(raw_bytes.decode("utf-8"))
+                    tmp.write(decoder.decode(raw_bytes, final=False))
                 except UnicodeDecodeError as exc:
                     raise RemoteReadError(
                         f"Remote CSV at {url!r} is not valid UTF-8: {exc}",
                         url=url,
                     ) from exc
                 raw_bytes = response.read(_URL_FETCH_CHUNK_SIZE)
+            # Flush any bytes buffered inside the decoder for the final
+            # (possibly incomplete) multi-byte sequence.
+            try:
+                tmp.write(decoder.decode(b"", final=True))
+            except UnicodeDecodeError as exc:
+                raise RemoteReadError(
+                    f"Remote CSV at {url!r} is not valid UTF-8: {exc}",
+                    url=url,
+                ) from exc
 
         tmp.close()
         return tmp_name
