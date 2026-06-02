@@ -350,8 +350,140 @@ class TestMissingPolars:
 
 
 # ---------------------------------------------------------------------------
-# Wrong type → TypeError
+# Install contract: pyarrow is bundled in arnio[polars]
 # ---------------------------------------------------------------------------
+
+
+class TestInstallContract:
+    """Verify that missing pyarrow surfaces the correct arnio[polars] hint."""
+
+    def test_from_polars_missing_pyarrow_hints_polars_extra(self):
+        """When pyarrow is absent, the ImportError should say arnio[polars]."""
+        import arnio as ar
+
+        with patch.dict(sys.modules, {"pyarrow": None}):
+            # polars must be present for the pyarrow check to be reached;
+            # skip if polars is not installed in this environment.
+            try:
+                import polars as pl
+
+                pldf = pl.DataFrame({"x": [1, 2]})
+            except ImportError:
+                pytest.skip("polars not installed")
+
+            with pytest.raises(ImportError, match=r"arnio\[polars\]"):
+                ar.from_polars(pldf)
+
+    def test_to_polars_missing_pyarrow_surfaces_error(self):
+        """to_polars() delegates to to_arrow() which raises ImportError for pyarrow."""
+        import arnio as ar
+
+        frame = ar.from_pandas(pd.DataFrame({"x": [1, 2]}))
+        with patch.dict(sys.modules, {"pyarrow": None}):
+            with pytest.raises(ImportError):
+                ar.to_polars(frame)
+
+
+# ---------------------------------------------------------------------------
+# Arrow bridge: from_polars does NOT go through pandas
+# ---------------------------------------------------------------------------
+
+
+class TestArrowBridgeNoPandas:
+    """Verify that from_polars() uses _from_arrow_table, not from_pandas."""
+
+    @pytest.fixture(autouse=True)
+    def skip_if_missing(self):
+        pytest.importorskip("polars")
+        pytest.importorskip("pyarrow")
+
+    def test_from_polars_does_not_call_from_pandas(self):
+        """from_polars() must not invoke from_pandas() internally."""
+        import polars as pl
+
+        import arnio as ar
+        from arnio import convert as _convert_mod
+
+        pldf = pl.DataFrame({"x": pl.Series([1, 2, 3], dtype=pl.Int64)})
+
+        with patch.object(
+            _convert_mod, "from_pandas", wraps=_convert_mod.from_pandas
+        ) as mock_fp:
+            result = ar.from_polars(pldf)
+            mock_fp.assert_not_called()
+
+        assert result.shape == (3, 1)
+
+    def test_from_polars_calls_from_arrow_table(self):
+        """from_polars() must route through _from_arrow_table()."""
+        import polars as pl
+
+        import arnio as ar
+        from arnio import convert as _convert_mod
+
+        pldf = pl.DataFrame({"a": [1, 2], "b": ["x", "y"]})
+
+        with patch.object(
+            _convert_mod, "_from_arrow_table", wraps=_convert_mod._from_arrow_table
+        ) as mock_fat:
+            ar.from_polars(pldf)
+            mock_fat.assert_called_once()
+
+    def test_int_columns_via_arrow_bridge(self):
+        import polars as pl
+
+        import arnio as ar
+
+        pldf = pl.DataFrame({"n": pl.Series([10, 20, 30], dtype=pl.Int64)})
+        frame = ar.from_polars(pldf)
+        pd_out = ar.to_pandas(frame)
+        assert pd_out["n"].tolist() == [10, 20, 30]
+
+    def test_float_columns_via_arrow_bridge(self):
+        import polars as pl
+
+        import arnio as ar
+
+        pldf = pl.DataFrame({"f": pl.Series([1.5, 2.5], dtype=pl.Float64)})
+        frame = ar.from_polars(pldf)
+        pd_out = ar.to_pandas(frame)
+        assert pd_out["f"][0] == pytest.approx(1.5)
+
+    def test_bool_columns_via_arrow_bridge(self):
+        import polars as pl
+
+        import arnio as ar
+
+        pldf = pl.DataFrame({"b": pl.Series([True, False, True], dtype=pl.Boolean)})
+        frame = ar.from_polars(pldf)
+        pd_out = ar.to_pandas(frame)
+        assert list(pd_out["b"]) == [True, False, True]
+
+    def test_string_columns_via_arrow_bridge(self):
+        import polars as pl
+
+        import arnio as ar
+
+        pldf = pl.DataFrame({"s": ["hello", "world"]})
+        frame = ar.from_polars(pldf)
+        pd_out = ar.to_pandas(frame)
+        assert list(pd_out["s"]) == ["hello", "world"]
+
+    def test_nulls_preserved_via_arrow_bridge(self):
+        import polars as pl
+
+        import arnio as ar
+
+        pldf = pl.DataFrame(
+            {
+                "x": pl.Series([1, None, 3], dtype=pl.Int64),
+                "y": ["a", None, "c"],
+            }
+        )
+        frame = ar.from_polars(pldf)
+        pd_out = ar.to_pandas(frame)
+        assert pd.isna(pd_out["x"].iloc[1])
+        assert pd.isna(pd_out["y"].iloc[1])
 
 
 class TestWrongType:

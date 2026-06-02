@@ -420,11 +420,127 @@ def from_pandas(df: pd.DataFrame) -> ArFrame:
     return ArFrame(cpp_frame, attrs=copylib.deepcopy(df.attrs))
 
 
+def _from_arrow_table(table: pa.Table) -> ArFrame:
+    """Import a ``pyarrow.Table`` into an ArFrame without a pandas intermediate.
+
+    Reads each Arrow column's buffers directly and constructs the ArFrame
+    column-by-column, preserving nulls via the Arrow validity bitmap.
+
+    Parameters
+    ----------
+    table : pa.Table
+        Input Arrow table, typically produced by ``polars.DataFrame.to_arrow()``.
+
+    Returns
+    -------
+    ArFrame
+        Equivalent ArFrame with inferred types and null values preserved.
+
+    Raises
+    ------
+    ImportError
+        If pyarrow is not installed.
+    TypeError
+        If a column's Arrow type cannot be mapped to an Arnio native dtype.
+    """
+    try:
+        import pyarrow as pa_mod
+    except ImportError as exc:
+        raise ImportError(
+            "_from_arrow_table() requires pyarrow. "
+            "Install it with: pip install arnio[arrow]"
+        ) from exc
+
+    import pyarrow as pa_mod
+
+    _ARROW_INT_TYPES = frozenset(
+        [
+            "int8",
+            "int16",
+            "int32",
+            "int64",
+            "uint8",
+            "uint16",
+            "uint32",
+            "uint64",
+        ]
+    )
+    _ARROW_FLOAT_TYPES = frozenset(["float", "double", "float32", "float64"])
+    _ARROW_STRING_TYPES = frozenset(["string", "large_string", "utf8", "large_utf8"])
+
+    columns: dict[str, list[object]] = {}
+    dtype_hints: dict[str, _DType] = {}
+
+    for i, name in enumerate(table.column_names):
+        raw_col = table.column(i)
+        # Flatten any ChunkedArray into a single Array
+        arr = (
+            raw_col.combine_chunks()
+            if isinstance(raw_col, pa_mod.ChunkedArray)
+            else raw_col
+        )
+        type_str = str(arr.type)
+
+        if type_str in _ARROW_INT_TYPES:
+            arr64 = arr.cast(pa_mod.int64())
+            null_mask = arr64.is_null()
+            values: list[object] = [
+                None if null_mask[j].as_py() else arr64[j].as_py()
+                for j in range(len(arr64))
+            ]
+            dtype_hints[name] = _DType.INT64
+
+        elif type_str in _ARROW_FLOAT_TYPES:
+            arr64 = arr.cast(pa_mod.float64())
+            null_mask = arr64.is_null()
+            values = [
+                None if null_mask[j].as_py() else arr64[j].as_py()
+                for j in range(len(arr64))
+            ]
+            dtype_hints[name] = _DType.FLOAT64
+
+        elif type_str == "bool":
+            null_mask = arr.is_null()
+            values = [
+                None if null_mask[j].as_py() else arr[j].as_py()
+                for j in range(len(arr))
+            ]
+            dtype_hints[name] = _DType.BOOL
+
+        elif type_str in _ARROW_STRING_TYPES:
+            null_mask = arr.is_null()
+            values = [
+                None if null_mask[j].as_py() else arr[j].as_py()
+                for j in range(len(arr))
+            ]
+            # STRING is ArFrame's default dtype — no hint needed
+
+        elif type_str == "null":
+            values = [None] * len(arr)
+
+        else:
+            raise TypeError(
+                f"Column '{name}' has Arrow type '{arr.type}' which cannot be "
+                "imported into ArFrame. Convert it to int64, float64, bool, or "
+                "string before calling from_polars()."
+            )
+
+        columns[name] = values
+
+    cpp_frame = _Frame.from_dict(columns, dtype_hints, table.num_rows)
+    return ArFrame(cpp_frame)
+
+
 def from_polars(df: object) -> ArFrame:
     """Convert a Polars DataFrame to ArFrame.
 
     Delegates to :func:`arnio.integrations.polars.from_polars`.
-    Polars is an optional dependency; install it with ``pip install arnio[polars]``.
+    Polars and pyarrow are optional dependencies; install both with
+    ``pip install arnio[polars]``.
+
+    The conversion goes through the Arrow buffer bridge
+    (``pl.DataFrame.to_arrow()`` → ``_from_arrow_table()``) with no pandas
+    intermediate frame involved.
 
     Parameters
     ----------
@@ -439,7 +555,8 @@ def from_polars(df: object) -> ArFrame:
     Raises
     ------
     ImportError
-        If polars or pyarrow is not installed.
+        If ``polars`` or ``pyarrow`` is not installed.
+        Install both with: ``pip install arnio[polars]``.
     TypeError
         If *df* is not a ``pl.DataFrame`` or contains unsupported dtypes.
 

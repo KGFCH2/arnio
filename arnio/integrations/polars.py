@@ -1,10 +1,16 @@
 """Polars DataFrame import and export helpers for Arnio.
 
-This module provides zero-copy interop between ArFrame and Polars DataFrames
-via an Arrow buffer bridge. No new serialization logic is introduced:
+This module provides Arrow-bridge interop between ArFrame and Polars DataFrames.
+No pandas intermediate is involved:
 
     to_polars()   — ArFrame → pa.Table (existing to_arrow()) → pl.DataFrame
-    from_polars() — pl.DataFrame → pa.Table (.to_arrow()) → ArFrame (existing Arrow import)
+    from_polars() — pl.DataFrame → pa.Table (.to_arrow()) → ArFrame
+                    (via _from_arrow_table(), reading Arrow column buffers
+                    directly without a pandas intermediate)
+
+Both ``polars`` and ``pyarrow`` are required; install both with::
+
+    pip install arnio[polars]
 
 Polars is an optional dependency; both functions raise ImportError with a
 clear install hint when it is not available.
@@ -115,9 +121,9 @@ def _unsupported_hint(type_name: str, col_name: str) -> str:
 def from_polars(df: pl.DataFrame) -> ArFrame:
     """Convert a Polars DataFrame to an ArFrame.
 
-    Uses the zero-copy Arrow bridge: ``df.to_arrow()`` produces a
-    ``pyarrow.Table`` which is then imported through Arnio's existing
-    Arrow→ArFrame path (``ar.from_arrow`` / ``pa.Table`` → ``from_pandas``).
+    Uses the Arrow bridge: ``df.to_arrow()`` produces a ``pyarrow.Table``
+    whose buffers are read column-by-column into ArFrame via Arnio's native
+    Arrow column reader — no pandas intermediate is involved.
 
     Parameters
     ----------
@@ -173,18 +179,17 @@ def from_polars(df: pl.DataFrame) -> ArFrame:
     except ImportError as exc:
         raise ImportError(
             "from_polars() requires pyarrow for the Arrow bridge. "
-            "Install it with: pip install arnio[arrow]"
+            "Install it with: pip install arnio[polars]"
         ) from exc
 
-    # df.to_arrow() returns a pa.Table; route it through from_pandas via Arrow.
+    # df.to_arrow() returns a pa.Table; route it through Arnio's Arrow import.
     arrow_table = df.to_arrow()
 
-    # Use Arnio's existing Arrow→pandas→ArFrame path.
+    # Import column-by-column directly from the Arrow table buffers into
+    # ArFrame — no pandas intermediate frame is created.
+    from arnio.convert import _from_arrow_table
 
-    pandas_df = arrow_table.to_pandas()
-    from arnio.convert import from_pandas
-
-    return from_pandas(pandas_df)
+    return _from_arrow_table(arrow_table)
 
 
 def to_polars(frame: ArFrame) -> pl.DataFrame:
@@ -217,9 +222,8 @@ def to_polars(frame: ArFrame) -> pl.DataFrame:
     Raises
     ------
     ImportError
-        If ``polars`` is not installed.
-    ImportError
-        If ``pyarrow`` is not installed (required for the Arrow bridge).
+        If ``polars`` or ``pyarrow`` is not installed.
+        Install both with: ``pip install arnio[polars]``.
     TypeError
         If *frame* is not an ArFrame.
 
