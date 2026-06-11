@@ -43,7 +43,15 @@ from .cleaning import (
     validate_columns_exist,
     winsorize_outliers,
 )
-from .convert import from_dict, from_pandas, from_polars, to_arrow, to_pandas, to_polars
+from .convert import (
+    from_arrow,
+    from_dict,
+    from_pandas,
+    from_polars,
+    to_arrow,
+    to_pandas,
+    to_polars,
+)
 from .encode_categorical import encode_categorical
 from .exceptions import (
     ArnioError,
@@ -193,6 +201,7 @@ __all__ = [
     "to_polars",
     "from_pandas",
     "from_polars",
+    "from_arrow",
     "from_records",
     "from_dict",
     # Integrations
